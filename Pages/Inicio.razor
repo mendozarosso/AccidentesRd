@@ -1,0 +1,235 @@
+@page "/"
+@using Blazored.Toast.Services
+@inject IToastService ToastService
+@inject IJSRuntime JSRuntime
+
+<div class="container-fluid mb-4">
+    <h1 class="text-center my-4">Registro de Accidentes de Tránsito</h1>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Accidentes</h5>
+                    <p class="card-text display-4">@accidentes.Count</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Vehículos</h5>
+                    <p class="card-text display-4">@accidentes.Sum(a => a.VehiculosInvolucrados)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Muertos</h5>
+                    <p class="card-text display-4">@accidentes.Sum(a => a.Casualidades)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Heridos</h5>
+                    <p class="card-text display-4">@(accidentes.Sum(a => a.VehiculosInvolucrados) - accidentes.Sum(a => a.Casualidades))</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <h2>@(editando ? "Editar Accidente" : "Agregar Nuevo Accidente")</h2>
+            <div class="form-group">
+                <label for="fecha">Fecha:</label>
+                <input type="date" id="fecha" class="form-control" @bind="nuevoAccidente.Fecha" />
+            </div>
+
+            <div class="form-group">
+                <label for="descripcion">Descripción:</label>
+                <input type="text" id="descripcion" class="form-control" @bind="nuevoAccidente.Descripcion" />
+            </div>
+
+            <div class="form-group">
+                <label for="vehiculos">Vehículos involucrados:</label>
+                <input type="number" id="vehiculos" class="form-control" @bind="nuevoAccidente.VehiculosInvolucrados" />
+            </div>
+
+            <div class="form-group">
+                <label for="Casualidades">Casualidades:</label>
+                <input type="number" id="Casualidades" class="form-control" @bind="nuevoAccidente.Casualidades" />
+            </div>
+
+            <div class="form-group">
+                <label for="marcas">Marcas de los vehículos (separadas por coma):</label>
+                <input type="text" id="marcas" class="form-control" @bind="marcasVehiculos" />
+            </div>
+
+            <button class="btn btn-primary" @onclick="GuardarAccidente">@(editando ? "Guardar Cambios" : "Agregar Accidente")</button>
+        </div>
+
+        <div class="col-md-6">
+            <h2>Lista de Accidentes</h2>
+
+            @if (accidentes.Any())
+            {
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Descripción</th>
+                            <th>Vehículos</th>
+                            <th>Costo Estimado</th>
+                            <th>Casualidades</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var accidente in accidentes)
+                        {
+                            <tr>
+                                <td>@accidente.Fecha.ToShortDateString()</td>
+                                <td>@accidente.Descripcion</td>
+                                <td>@accidente.VehiculosInvolucrados</td>
+                                <td>@accidente.CostoEstimado.ToString("C")</td>
+                                <td>@accidente.Casualidades</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" @onclick="() => SeleccionarAccidenteParaReporte(accidente)">Reporte</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => EditarAccidente(accidente)">Editar</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => EliminarAccidente(accidente)">Eliminar</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p>No hay accidentes registrados.</p>
+            }
+        </div>
+    </div>
+</div>
+
+<ReportModal accidente="@accidenteSeleccionado" />
+
+@code {
+    private List<Accidente> accidentes = new List<Accidente>();
+    private Accidente nuevoAccidente = new Accidente();
+    private Accidente accidenteSeleccionado;
+    private string marcasVehiculos = "";
+    private bool editando = false;
+
+    private async Task GuardarAccidente()
+    {
+        if (string.IsNullOrWhiteSpace(nuevoAccidente.Descripcion))
+        {
+            ToastService.ShowError("La descripción del accidente no puede estar vacía.");
+            return;
+        }
+
+        if (editando)
+        {
+            var accidenteExistente = accidentes.FirstOrDefault(a => a.Fecha == nuevoAccidente.Fecha);
+            if (accidenteExistente != null)
+            {
+                accidenteExistente.Descripcion = nuevoAccidente.Descripcion;
+                accidenteExistente.VehiculosInvolucrados = nuevoAccidente.VehiculosInvolucrados;
+                accidenteExistente.MarcasVehiculos = marcasVehiculos.Split(',').Select(m => m.Trim()).ToList();
+                accidenteExistente.Casualidades = nuevoAccidente.Casualidades;
+                accidenteExistente.CalcularCostoEstimado();
+            }
+
+            ToastService.ShowSuccess("Accidente actualizado con éxito.");
+            editando = false;
+        }
+        else
+        {
+            nuevoAccidente.MarcasVehiculos = marcasVehiculos.Split(',').Select(m => m.Trim()).ToList();
+            nuevoAccidente.CalcularCostoEstimado();
+            accidentes.Add(nuevoAccidente);
+            ToastService.ShowSuccess("Accidente agregado con éxito.");
+        }
+
+        await EditarRegistro();
+        nuevoAccidente = new Accidente();
+        marcasVehiculos = "";
+    }
+
+    private void EditarAccidente(Accidente accidente)
+    {
+        nuevoAccidente = new Accidente
+        {
+            Fecha = accidente.Fecha,
+            Descripcion = accidente.Descripcion,
+            VehiculosInvolucrados = accidente.VehiculosInvolucrados,
+            Casualidades = accidente.Casualidades,
+            MarcasVehiculos = new List<string>(accidente.MarcasVehiculos),
+            CostoEstimado = accidente.CostoEstimado
+        };
+        marcasVehiculos = string.Join(", ", accidente.MarcasVehiculos);
+        editando = true;
+    }
+
+    private async Task EliminarAccidente(Accidente accidente)
+    {
+        accidentes.Remove(accidente);
+        await EditarRegistro();
+        ToastService.ShowSuccess("Accidente eliminado con éxito.");
+    }
+
+    private void SeleccionarAccidenteParaReporte(Accidente accidente)
+    {
+        accidenteSeleccionado = accidente;
+    }
+
+    private async Task EditarRegistro()
+    {
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "accidentes", System.Text.Json.JsonSerializer.Serialize(accidentes));
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var accidentesGuardados = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "accidentes");
+        if (!string.IsNullOrEmpty(accidentesGuardados))
+        {
+            accidentes = System.Text.Json.JsonSerializer.Deserialize<List<Accidente>>(accidentesGuardados);
+        }
+    }
+
+    public class Accidente
+    {
+        public DateTime Fecha { get; set; } = DateTime.Today;
+        public string Descripcion { get; set; }
+        public int VehiculosInvolucrados { get; set; }
+        public List<string> MarcasVehiculos { get; set; } = new List<string>();
+        public decimal CostoEstimado { get; set; }
+        public int Casualidades { get; set; }
+
+        public void CalcularCostoEstimado()
+        {
+            CostoEstimado = MarcasVehiculos.Sum(marca => GetCostoPorMarca(marca)) * 1000;
+        }
+
+        private int GetCostoPorMarca(string marca)
+        {
+            return marca.ToLower() switch
+            {
+                "toyota" => 5,
+                "honda" => 4,
+                "ford" => 3,
+                "chevrolet" => 3,
+                "bmw" => 7,
+                "mercedes" => 7,
+                "audi" => 6,
+                _ => 2
+            };
+        }
+    }
+}

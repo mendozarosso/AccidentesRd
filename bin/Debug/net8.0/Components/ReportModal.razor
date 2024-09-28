@@ -1,0 +1,75 @@
+@inject IJSRuntime JSRuntime
+
+
+
+@if (IsVisible)
+{
+    <div class="modal show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reporte de Accidente</h5>
+                    <button type="button" class="close" @onclick="CerrarModal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    @if (accidente != null)
+                    {
+                        <div id="report-container" class="report">
+                            <h2>Reporte de Accidente</h2>
+                            <p><strong>Fecha:</strong> @accidente.Fecha.ToShortDateString()</p>
+                            <p><strong>Descripción:</strong> @accidente.Descripcion</p>
+                            <p><strong>Vehículos Involucrados:</strong> @accidente.VehiculosInvolucrados</p>
+                            <p><strong>Casualidades:</strong> @accidente.Casualidades</p>
+                            <p><strong>Marcas de Vehículos:</strong> @string.Join(", ", accidente.MarcasVehiculos)</p>
+                            <p><strong>Costo Estimado:</strong> @accidente.CostoEstimado.ToString("C")</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <p>No se ha seleccionado ningún accidente para generar el reporte.</p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" @onclick="ImprimirReporte">Imprimir Reporte</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter] public Accidente accidente { get; set; }
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+
+   private async Task ImprimirReporte()
+{
+    await JSRuntime.InvokeVoidAsync("printReport");
+}
+
+    private async Task CerrarModal()
+    {
+        await IsVisibleChanged.InvokeAsync(false);
+    }
+}
+
+<style>
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        #report-container, #report-container * {
+            visibility: visible;
+        }
+        #report-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+        }
+    }
+</style>
